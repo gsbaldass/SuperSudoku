@@ -25,7 +25,7 @@ def _preencher(board):
                 return False
     return True
 
-def _valido(board, r, c, n):
+def _valido(board, r, c, n): #verificação do numero
     if n in board[r]:
         return False
     if n in [board[i][c] for i in range(9)]:
@@ -37,7 +37,8 @@ def _valido(board, r, c, n):
                 return False
     return True
 
-def criar_puzzle():
+
+def criar_puzzle(): # r = row, c = column, n = número
     solucao = gerar_tabuleiro()
     puzzle = copy.deepcopy(solucao)
     cells = [(r, c) for r in range(9) for c in range(9)]
@@ -49,8 +50,8 @@ def criar_puzzle():
 
 class Sudoku:
     def __init__(self, root):
-        self.root = root
-        self.root.title("Super Sudoku wow")
+        self.root = root 
+        self.root.title("Super Sudoku do Jao e Gui")
         self.root.configure(bg="white")
         self.root.resizable(False, False)
         self.puzzle  = []
@@ -58,13 +59,15 @@ class Sudoku:
         self.usuario = []
         self.fixas   = []
         self.sel     = None
+        self.erros = 0
         self._build_ui()
         self.novo_jogo()
-        self.erros = 0
 
     def _build_ui(self):
-        tk.Label(self.root, text="Super Sudoku wow", font=("Arial", 16),
+        tk.Label(self.root, text="Super Sudoku do Jao e Gui", font=("Arial", 16),
                  bg="white", fg="black").pack(pady=(12, 6))
+        self.label_erros = tk.Label(self.root, text=f"Erros: {self.erros}", font=("Arial", 10),
+                 bg="white", fg="red").pack(pady=(0, 12))
 
         self.canvas = tk.Canvas(self.root, width=9*54, height=9*54,
                                 bg="white", highlightthickness=1,
@@ -81,14 +84,17 @@ class Sudoku:
         tk.Button(btn_frame, text="Apagar", font=("Arial", 10),
                   bg="#dddddd", fg="black", relief="flat", padx=10, pady=4,
                   command=self._apagar).pack(side="left", padx=6)
+        tk.Button(btn_frame, text="Resolver", font=("Arial", 10),
+                  bg="#dddddd", fg="black", relief="flat", padx=10, pady=4,
+                  command=self._resolver).pack(side="left", padx=6)
 
     def novo_jogo(self):
         self.puzzle, self.solucao = criar_puzzle()
         self.usuario = copy.deepcopy(self.puzzle)
         self.fixas   = [[self.puzzle[r][c] != 0 for c in range(9)] for r in range(9)]
         self.sel     = None
-        self._desenhar()
         self.erros = 0
+        self._desenhar()
 
     def _click(self, event): #comando que permite usar o mouse pra clicar na tela btw o copiloto me ajudou a cozinhar
         c = event.x // 54
@@ -111,7 +117,7 @@ class Sudoku:
         if event.keysym in moves:
             dr, dc = moves[event.keysym]
             self.sel = (max(0, min(8, r+dr)), max(0, min(8, c+dc)))
-            self._desenhar()        
+            self._desenhar()     
 
     def _inserir(self, valor):
         if self.sel is None:
@@ -122,9 +128,12 @@ class Sudoku:
         self.usuario[r][c] = valor
         if valor != self.solucao[r][c]:
             self.erros += 1
+            self._desenhar()
             if self.erros >= 5:
                 messagebox.showerror("Fim de jogo", "Você errou mais de 5 vezes! Comece um novo jogo.")
                 self.novo_jogo()
+            else:
+                self.label_erros.config(text=f"Erros: {self.erros}")
             return
         self._desenhar()
         if self._vitoria():
@@ -137,6 +146,10 @@ class Sudoku:
         if not self.fixas[r][c]:
             self.usuario[r][c] = 0
             self._desenhar()
+    
+    def _resolver(self): # resolve todo o sudoku
+        self.usuario = self.solucao
+        self._desenhar()
 
     def _vitoria(self):
         for r in range(9):
