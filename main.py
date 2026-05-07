@@ -3,52 +3,23 @@
 import tkinter as tk
 from tkinter import messagebox #mostra as mensagens de erro e vitória
 import random #embaralha os numeros pra sempre ter um jogo diferente
-import copy 
-
-def gerar_tabuleiro():
-    board = [[0]*9 for _ in range(9)]
-    _preencher(board)
-    return board
-
-def _preencher(board):
-    nums = list(range(1, 10))
-    for i in range(9):
-        for j in range(9):
-            if board[i][j] == 0:
-                random.shuffle(nums)
-                for n in nums:
-                    if _valido(board, i, j, n):
-                        board[i][j] = n
-                        if _preencher(board):
-                            return True
-                        board[i][j] = 0
-                return False
-    return True
-
-def _valido(board, r, c, n): #verificação do numero
-    if n in board[r]:
-        return False
-    if n in [board[i][c] for i in range(9)]:
-        return False
-    br, bc = (r // 3) * 3, (c // 3) * 3
-    for i in range(br, br + 3):
-        for j in range(bc, bc + 3):
-            if board[i][j] == n:
-                return False
-    return True
-
-
-def criar_puzzle(): # r = row, c = column, n = número
-    solucao = gerar_tabuleiro()
-    puzzle = copy.deepcopy(solucao)
-    cells = [(r, c) for r in range(9) for c in range(9)]
-    random.shuffle(cells)
-    for r, c in cells[:45]:
-        puzzle[r][c] = 0
-    return puzzle, solucao
-
+import copy
+from sudoku import SudokuBoard 
 
 class Sudoku:
+    def __init__(self, root):
+        self.root = root 
+        self.root.title("Super Sudoku do Jao e Gui")
+        self.root.configure(bg="white")
+        self.root.resizable(False, False)
+        self.puzzle  = []
+        self.solucao = []
+        self.usuario = []
+        self.fixas   = []
+        self.sel     = None
+        self.erros = 0
+        self._build_ui()
+        self.novo_jogo()
     def __init__(self, root):
         self.root = root 
         self.root.title("Super Sudoku do Jao e Gui")
@@ -89,7 +60,9 @@ class Sudoku:
                   command=self._resolver).pack(side="left", padx=6)
 
     def novo_jogo(self):
-        self.puzzle, self.solucao = criar_puzzle()
+        board = SudokuBoard()
+        board.generate_full_board()
+        self.puzzle, self.solucao = board.create_puzzle()
         self.usuario = copy.deepcopy(self.puzzle)
         self.fixas   = [[self.puzzle[r][c] != 0 for c in range(9)] for r in range(9)]
         self.sel     = None
@@ -129,6 +102,7 @@ class Sudoku:
         if valor != self.solucao[r][c]:
             self.erros += 1
             self._desenhar()
+            self.root.update()  # Force update to show the number
             if self.erros >= 5:
                 messagebox.showerror("Fim de jogo", "Você errou mais de 5 vezes! Comece um novo jogo.")
                 self.novo_jogo()
@@ -136,6 +110,7 @@ class Sudoku:
                 self.label_erros.config(text=f"Erros: {self.erros}")
             return
         self._desenhar()
+        self.root.update()  # Force update
         if self._vitoria():
             messagebox.showinfo("Parabéns!", "Você completou o Sudoku!")
 
@@ -146,6 +121,7 @@ class Sudoku:
         if not self.fixas[r][c]:
             self.usuario[r][c] = 0
             self._desenhar()
+            self.root.update()
     
     def _resolver(self): # resolve todo o sudoku
         self.usuario = self.solucao
