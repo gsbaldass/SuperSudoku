@@ -2,8 +2,6 @@
 
 import tkinter as tk
 from tkinter import messagebox #mostra as mensagens de erro e vitória
-import random #embaralha os numeros pra sempre ter um jogo diferente
-import copy
 from sudoku import SudokuBoard 
 
 class Sudoku:
@@ -18,19 +16,8 @@ class Sudoku:
         self.fixas   = []
         self.sel     = None
         self.erros = 0
-        self._build_ui()
-        self.novo_jogo()
-    def __init__(self, root):
-        self.root = root 
-        self.root.title("Super Sudoku do Jao e Gui")
-        self.root.configure(bg="white")
-        self.root.resizable(False, False)
-        self.puzzle  = []
-        self.solucao = []
-        self.usuario = []
-        self.fixas   = []
-        self.sel     = None
-        self.erros = 0
+        self.board_usuario = SudokuBoard()
+        self.board_solucao = SudokuBoard()
         self._build_ui()
         self.novo_jogo()
 
@@ -61,9 +48,11 @@ class Sudoku:
 
     def novo_jogo(self):
         board = SudokuBoard()
-        board.generate_full_board()
-        self.puzzle, self.solucao = board.create_puzzle()
-        self.usuario = copy.deepcopy(self.puzzle)
+        board.gerar_tabuleiro_completo()
+        self.puzzle, self.solucao = board.criar_quebra_cabeca()
+        self.board_usuario = SudokuBoard(self.puzzle)
+        self.board_solucao = SudokuBoard(self.solucao)
+        self.usuario = self.board_usuario.board
         self.fixas   = [[self.puzzle[r][c] != 0 for c in range(9)] for r in range(9)]
         self.sel     = None
         self.erros = 0
@@ -98,7 +87,7 @@ class Sudoku:
         r, c = self.sel
         if self.fixas[r][c]:
             return
-        self.usuario[r][c] = valor
+        self.board_usuario.definir_celula(r, c, valor)
         if valor != self.solucao[r][c]:
             self.erros += 1
             self._desenhar()
@@ -119,20 +108,17 @@ class Sudoku:
             return
         r, c = self.sel
         if not self.fixas[r][c]:
-            self.usuario[r][c] = 0
+            self.board_usuario.definir_celula(r, c, 0)
             self._desenhar()
             self.root.update()
     
     def _resolver(self): # resolve todo o sudoku
-        self.usuario = self.solucao
+        self.board_usuario = SudokuBoard(self.board_solucao.obter_tabuleiro())
+        self.usuario = self.board_usuario.board
         self._desenhar()
 
     def _vitoria(self):
-        for r in range(9):
-            for c in range(9):
-                if self.usuario[r][c] != self.solucao[r][c]:
-                    return False
-        return True
+        return self.board_usuario.esta_completo() and self.board_usuario.esta_resolvido(self.board_solucao)
 
     def _desenhar(self):
         self.canvas.delete("all")
