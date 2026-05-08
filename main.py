@@ -1,33 +1,69 @@
-#o jogo ta funcionando mas quando voce seleciona uma coluna e coloca um numero vc tem que ir pra outra coluna pra conseguir ver ele, boa sorte arrumando
-
 import tkinter as tk
-from tkinter import messagebox #mostra as mensagens de erro e vitória
-from sudoku import SudokuBoard 
+from tkinter import messagebox
+import copy
+from sudoku import SudokuBoard
+
+CELL = 54
+GRID = CELL * 9
+
+# Cores (tema branco/cru)
+C_CELL_NORMAL = "white"
+C_CELL_SEL    = "#c8c8c8"
+C_CELL_PEER   = "#e8e8e8"
+C_CELL_SAME   = "#d0d0ff"
+C_NUM_FIXED   = "black"
+C_NUM_USER    = "#1a1aaa"
+C_NUM_ERROR   = "#ff0000"
+C_NOTE        = "#666699"
+
 
 class Sudoku:
     def __init__(self, root):
-        self.root = root 
+        self.root = root
         self.root.title("Super Sudoku do Jao e Gui")
         self.root.configure(bg="white")
         self.root.resizable(False, False)
-        self.puzzle  = []
-        self.solucao = []
-        self.usuario = []
-        self.fixas   = []
-        self.sel     = None
-        self.erros = 0
-        self.board_usuario = SudokuBoard()
-        self.board_solucao = SudokuBoard()
+
+        # Matrizes principais
+        self.puzzle   = []
+        self.solucao  = []
+        self.usuario  = []
+        self.fixas    = []
+
+        # Notas: matriz 9x9 onde cada célula tem uma lista de números anotados
+        self.notas = []
+        for i in range(9):
+            linha = []
+            for j in range(9):
+                linha.append([])
+            self.notas.append(linha)
+
+        self.sel       = None
+        self.erros     = 0
+        self.modo_nota = False
+        self.segundos  = 0
+        self._timer_id = None
+
         self._build_ui()
         self.novo_jogo()
 
+    # ── Construção da interface ──────────────────────────────────
     def _build_ui(self):
-        tk.Label(self.root, text="Super Sudoku do Jao e Gui", font=("Arial", 16),
-                 bg="white", fg="black").pack(pady=(12, 6))
-        self.label_erros = tk.Label(self.root, text=f"Erros: {self.erros}", font=("Arial", 10),
-                 bg="white", fg="red").pack(pady=(0, 12))
+        tk.Label(self.root, text="Super Sudoku do Jao e Gui",
+                 font=("Arial", 16), bg="white", fg="black").pack(pady=(12, 2))
 
-        self.canvas = tk.Canvas(self.root, width=9*54, height=9*54,
+        info_frame = tk.Frame(self.root, bg="white")
+        info_frame.pack(pady=(2, 4))
+
+        self.lbl_erros = tk.Label(info_frame, text="Erros: 0",
+                                  font=("Arial", 10), bg="white", fg="red")
+        self.lbl_erros.pack(side="left", padx=16)
+
+        self.lbl_timer = tk.Label(info_frame, text="00:00",
+                                  font=("Arial", 10), bg="white", fg="black")
+        self.lbl_timer.pack(side="left", padx=16)
+
+        self.canvas = tk.Canvas(self.root, width=GRID, height=GRID,
                                 bg="white", highlightthickness=1,
                                 highlightbackground="black")
         self.canvas.pack(padx=16, pady=4)
@@ -35,120 +71,352 @@ class Sudoku:
         self.root.bind("<Key>", self._tecla)
 
         btn_frame = tk.Frame(self.root, bg="white")
-        btn_frame.pack(pady=10)
-        tk.Button(btn_frame, text="Novo Jogo", font=("Arial", 10),
-                  bg="#dddddd", fg="black", relief="flat", padx=10, pady=4,
-                  command=self.novo_jogo).pack(side="left", padx=6)
-        tk.Button(btn_frame, text="Apagar", font=("Arial", 10),
-                  bg="#dddddd", fg="black", relief="flat", padx=10, pady=4,
-                  command=self._apagar).pack(side="left", padx=6)
-        tk.Button(btn_frame, text="Resolver", font=("Arial", 10),
-                  bg="#dddddd", fg="black", relief="flat", padx=10, pady=4,
-                  command=self._resolver).pack(side="left", padx=6)
+        btn_frame.pack(pady=6)
 
+        tk.Button(btn_frame, text="Novo Jogo", font=("Arial", 10),
+                  bg="#dddddd", fg="black", relief="flat",
+                  padx=10, pady=4, command=self.novo_jogo).pack(side="left", padx=6)
+
+        tk.Button(btn_frame, text="Apagar", font=("Arial", 10),
+                  bg="#dddddd", fg="black", relief="flat",
+                  padx=10, pady=4, command=self._apagar).pack(side="left", padx=6)
+
+        tk.Button(btn_frame, text="Resolver", font=("Arial", 10),
+                  bg="#dddddd", fg="black", relief="flat",
+                  padx=10, pady=4, command=self._resolver).pack(side="left", padx=6)
+
+        self.btn_nota = tk.Button(self.root, text="✏  Rascunho: OFF",
+                                  font=("Arial", 10), bg="#dddddd", fg="black",
+                                  relief="flat", padx=10, pady=4,
+                                  command=self._toggle_nota)
+        self.btn_nota.pack(pady=(0, 10))
+
+    # ── Cronômetro ───────────────────────────────────────────────
+    def _iniciar_timer(self):
+        if self._timer_id:
+            self.root.after_cancel(self._timer_id)
+        self.segundos = 0
+        self._tick()
+
+    def _tick(self):
+        minutos = self.segundos // 60
+        segs    = self.segundos % 60
+        self.lbl_timer.config(text=f"{minutos:02d}:{segs:02d}")
+        self.segundos += 1
+        self._timer_id = self.root.after(1000, self._tick)
+
+    def _parar_timer(self):
+        if self._timer_id:
+            self.root.after_cancel(self._timer_id)
+            self._timer_id = None
+
+    # ── Novo jogo ────────────────────────────────────────────────
     def novo_jogo(self):
         board = SudokuBoard()
-        board.gerar_tabuleiro_completo()
-        self.puzzle, self.solucao = board.criar_quebra_cabeca()
-        self.board_usuario = SudokuBoard(self.puzzle)
-        self.board_solucao = SudokuBoard(self.solucao)
-        self.usuario = self.board_usuario.board
-        self.fixas   = [[self.puzzle[r][c] != 0 for c in range(9)] for r in range(9)]
-        self.sel     = None
-        self.erros = 0
+        board.generate_full_board()
+        self.puzzle, self.solucao = board.create_puzzle()
+
+        # Copia o puzzle para o tabuleiro do usuário
+        self.usuario = []
+        for r in range(9):
+            linha = []
+            for c in range(9):
+                linha.append(self.puzzle[r][c])
+            self.usuario.append(linha)
+
+        # Marca quais células são fixas (dadas pelo puzzle)
+        self.fixas = []
+        for r in range(9):
+            linha = []
+            for c in range(9):
+                if self.puzzle[r][c] != 0:
+                    linha.append(True)
+                else:
+                    linha.append(False)
+            self.fixas.append(linha)
+
+        # Limpa as notas
+        self.notas = []
+        for i in range(9):
+            linha = []
+            for j in range(9):
+                linha.append([])
+            self.notas.append(linha)
+
+        self.sel       = None
+        self.erros     = 0
+        self.modo_nota = False
+        self._atualizar_btn_nota()
+        self.lbl_erros.config(text="Erros: 0")
+        self._iniciar_timer()
         self._desenhar()
 
-    def _click(self, event): #comando que permite usar o mouse pra clicar na tela btw o copiloto me ajudou a cozinhar
-        c = event.x // 54
-        r = event.y // 54
-        if 0 <= r < 9 and 0 <= c < 9:
+    # ── Clique do mouse ──────────────────────────────────────────
+    def _click(self, event):
+        c = event.x // CELL
+        r = event.y // CELL
+        if r >= 0 and r < 9 and c >= 0 and c < 9:
             self.sel = (r, c)
             self._desenhar()
 
-    def _tecla(self, event): #comando que permite usar o teclado pra interagir com o jogo
-        if event.keysym in ("Delete", "BackSpace"):
+    # ── Teclado ──────────────────────────────────────────────────
+    def _tecla(self, event):
+        if event.keysym == "Delete" or event.keysym == "BackSpace":
             self._apagar()
             return
+
         if event.char.isdigit() and event.char != "0":
             self._inserir(int(event.char))
             return
+
+        if event.keysym == "n":
+            self._toggle_nota()
+            return
+
+        # Navegação pelas setas
         if self.sel is None:
             self.sel = (0, 0)
-        r, c = self.sel
-        moves = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
-        if event.keysym in moves:
-            dr, dc = moves[event.keysym]
-            self.sel = (max(0, min(8, r+dr)), max(0, min(8, c+dc)))
-            self._desenhar()     
 
+        r, c = self.sel
+
+        if event.keysym == "Up":
+            r = r - 1
+        elif event.keysym == "Down":
+            r = r + 1
+        elif event.keysym == "Left":
+            c = c - 1
+        elif event.keysym == "Right":
+            c = c + 1
+
+        # Mantém dentro dos limites
+        if r < 0:
+            r = 0
+        if r > 8:
+            r = 8
+        if c < 0:
+            c = 0
+        if c > 8:
+            c = 8
+
+        self.sel = (r, c)
+        self._desenhar()
+
+    # ── Inserir número ───────────────────────────────────────────
     def _inserir(self, valor):
         if self.sel is None:
             return
+
         r, c = self.sel
+
         if self.fixas[r][c]:
             return
-        self.board_usuario.definir_celula(r, c, valor)
+
+        # Modo rascunho: adiciona ou remove nota
+        if self.modo_nota:
+            if self.usuario[r][c] == 0:
+                if valor in self.notas[r][c]:
+                    self.notas[r][c].remove(valor)
+                else:
+                    self.notas[r][c].append(valor)
+                self._desenhar()
+            return
+
+        # Modo normal: insere o número
+        self.usuario[r][c] = valor
+        self.notas[r][c] = []
+        self._limpar_notas_peers(r, c, valor)
+
         if valor != self.solucao[r][c]:
             self.erros += 1
+            self.lbl_erros.config(text=f"Erros: {self.erros}")
             self._desenhar()
-            self.root.update()  # Force update to show the number
             if self.erros >= 5:
-                messagebox.showerror("Fim de jogo", "Você errou mais de 5 vezes! Comece um novo jogo.")
+                self._parar_timer()
+                messagebox.showerror("Fim de jogo",
+                    "Você errou mais de 5 vezes! Comece um novo jogo.")
                 self.novo_jogo()
-            else:
-                self.label_erros.config(text=f"Erros: {self.erros}")
             return
-        self._desenhar()
-        self.root.update()  # Force update
-        if self._vitoria():
-            messagebox.showinfo("Parabéns!", "Você completou o Sudoku!")
 
+        self._desenhar()
+        if self._vitoria():
+            self._parar_timer()
+            minutos = (self.segundos - 1) // 60
+            segs    = (self.segundos - 1) % 60
+            messagebox.showinfo("Parabéns!",
+                f"Você completou o Sudoku!\nTempo: {minutos:02d}:{segs:02d}")
+
+    # ── Limpar notas dos peers ───────────────────────────────────
+    def _limpar_notas_peers(self, row, col, val):
+        box_row = (row // 3) * 3
+        box_col = (col // 3) * 3
+
+        for i in range(9):
+            # Linha
+            if val in self.notas[row][i]:
+                self.notas[row][i].remove(val)
+            # Coluna
+            if val in self.notas[i][col]:
+                self.notas[i][col].remove(val)
+
+        # Box 3x3
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if val in self.notas[i][j]:
+                    self.notas[i][j].remove(val)
+
+    # ── Apagar célula ────────────────────────────────────────────
     def _apagar(self):
         if self.sel is None:
             return
         r, c = self.sel
         if not self.fixas[r][c]:
-            self.board_usuario.definir_celula(r, c, 0)
+            self.usuario[r][c] = 0
+            self.notas[r][c] = []
             self._desenhar()
-            self.root.update()
-    
-    def _resolver(self): # resolve todo o sudoku
-        self.board_usuario = SudokuBoard(self.board_solucao.obter_tabuleiro())
-        self.usuario = self.board_usuario.board
-        self._desenhar()
 
-    def _vitoria(self):
-        return self.board_usuario.esta_completo() and self.board_usuario.esta_resolvido(self.board_solucao)
-
-    def _desenhar(self):
-        self.canvas.delete("all")
-        CELL = 54
-        sr, sc = self.sel if self.sel else (-1, -1)
-
+    # ── Resolver tudo ────────────────────────────────────────────
+    def _resolver(self):
+        self._parar_timer()
         for r in range(9):
             for c in range(9):
-                x1, y1 = c * CELL, r * CELL
-                x2, y2 = x1 + CELL, y1 + CELL
+                self.usuario[r][c] = self.solucao[r][c]
+                self.notas[r][c] = []
+        self._desenhar()
 
-                bg = "#c8c8c8" if (r == sr and c == sc) else "white"
-                self.canvas.create_rectangle(x1, y1, x2, y2, fill=bg, outline="")
+    # ── Modo rascunho ────────────────────────────────────────────
+    def _toggle_nota(self):
+        if self.modo_nota:
+            self.modo_nota = False
+        else:
+            self.modo_nota = True
+        self._atualizar_btn_nota()
+
+    def _atualizar_btn_nota(self):
+        if self.modo_nota:
+            self.btn_nota.config(text="✏  Rascunho: ON",  bg="#aaaadd")
+        else:
+            self.btn_nota.config(text="✏  Rascunho: OFF", bg="#dddddd")
+
+    # ── Verificar vitória ────────────────────────────────────────
+    def _vitoria(self):
+        for r in range(9):
+            for c in range(9):
+                if self.usuario[r][c] != self.solucao[r][c]:
+                    return False
+        return True
+
+    # ── Calcular peers da célula selecionada ─────────────────────
+    def _peers(self, sr, sc):
+        peers = []
+        box_row = (sr // 3) * 3
+        box_col = (sc // 3) * 3
+
+        for i in range(9):
+            # Linha
+            if (sr, i) not in peers and (sr, i) != (sr, sc):
+                peers.append((sr, i))
+            # Coluna
+            if (i, sc) not in peers and (i, sc) != (sr, sc):
+                peers.append((i, sc))
+
+        # Box 3x3
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if (i, j) not in peers and (i, j) != (sr, sc):
+                    peers.append((i, j))
+
+        return peers
+
+    # ── Desenhar o tabuleiro ─────────────────────────────────────
+    def _desenhar(self):
+        self.canvas.delete("all")
+
+        if self.sel:
+            sr, sc = self.sel
+        else:
+            sr, sc = -1, -1
+
+        # Número da célula selecionada (para destacar iguais)
+        num_sel = 0
+        if self.sel:
+            num_sel = self.usuario[sr][sc]
+
+        # Lista de peers da célula selecionada
+        if self.sel:
+            peers = self._peers(sr, sc)
+        else:
+            peers = []
+
+        # Desenha cada célula
+        for r in range(9):
+            for c in range(9):
+                x1 = c * CELL
+                y1 = r * CELL
+                x2 = x1 + CELL
+                y2 = y1 + CELL
 
                 val = self.usuario[r][c]
+
+                # Escolhe a cor de fundo
+                if r == sr and c == sc:
+                    bg = C_CELL_SEL
+                elif num_sel != 0 and val == num_sel:
+                    bg = C_CELL_SAME
+                elif (r, c) in peers:
+                    bg = C_CELL_PEER
+                else:
+                    bg = C_CELL_NORMAL
+
+                self.canvas.create_rectangle(x1, y1, x2, y2,
+                                             fill=bg, outline="")
+
+                # Desenha o número ou as notas
                 if val != 0:
-                    errado = (not self.fixas[r][c] and val != self.solucao[r][c])
-                    cor    = "#ff0000" if errado else "black"
-                    peso   = "bold" if self.fixas[r][c] else "normal"
-                    self.canvas.create_text(x1 + CELL//2, y1 + CELL//2,
+                    errado = False
+                    if not self.fixas[r][c] and val != self.solucao[r][c]:
+                        errado = True
+
+                    if errado:
+                        cor = C_NUM_ERROR
+                    elif self.fixas[r][c]:
+                        cor = C_NUM_FIXED
+                    else:
+                        cor = C_NUM_USER
+
+                    if self.fixas[r][c]:
+                        peso = "bold"
+                    else:
+                        peso = "normal"
+
+                    self.canvas.create_text(x1 + CELL // 2, y1 + CELL // 2,
                                             text=str(val),
                                             font=("Arial", 16, peso),
                                             fill=cor)
+                elif len(self.notas[r][c]) > 0:
+                    self._desenhar_notas(x1, y1, self.notas[r][c])
 
+        # Desenha as linhas da grade
         for i in range(10):
-            espessura = 2 if i % 3 == 0 else 1
-            self.canvas.create_line(i*CELL, 0, i*CELL, 9*CELL,
+            if i % 3 == 0:
+                espessura = 2
+            else:
+                espessura = 1
+
+            self.canvas.create_line(i * CELL, 0, i * CELL, GRID,
                                     fill="black", width=espessura)
-            self.canvas.create_line(0, i*CELL, 9*CELL, i*CELL,
+            self.canvas.create_line(0, i * CELL, GRID, i * CELL,
                                     fill="black", width=espessura)
+
+    # ── Desenhar notas dentro de uma célula ──────────────────────
+    def _desenhar_notas(self, x1, y1, notas):
+        sz = CELL // 3
+        for n in notas:
+            nr = (n - 1) // 3
+            nc = (n - 1) % 3
+            cx = x1 + nc * sz + sz // 2
+            cy = y1 + nr * sz + sz // 2
+            self.canvas.create_text(cx, cy, text=str(n),
+                                    font=("Arial", 7), fill=C_NOTE)
 
 
 if __name__ == "__main__":
