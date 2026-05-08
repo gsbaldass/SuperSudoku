@@ -6,7 +6,7 @@ from sudoku import SudokuBoard
 CELL = 54
 GRID = CELL * 9
 
-# Cores (tema branco/cru)
+# mudar as cores na aula de sexta
 C_CELL_NORMAL = "white"
 C_CELL_SEL    = "#c8c8c8"
 C_CELL_PEER   = "#e8e8e8"
@@ -24,13 +24,13 @@ class Sudoku:
         self.root.configure(bg="white")
         self.root.resizable(False, False)
 
-        # Matrizes principais
+        # matrizes
         self.puzzle   = []
         self.solucao  = []
         self.usuario  = []
         self.fixas    = []
 
-        # Notas: matriz 9x9 onde cada célula tem uma lista de números anotados
+# matriz de notas (candidatos) coloquei isso hoje
         self.notas = []
         for i in range(9):
             linha = []
@@ -47,7 +47,6 @@ class Sudoku:
         self._build_ui()
         self.novo_jogo()
 
-    # ── Construção da interface ──────────────────────────────────
     def _build_ui(self):
         tk.Label(self.root, text="Super Sudoku do Jao e Gui",
                  font=("Arial", 16), bg="white", fg="black").pack(pady=(12, 2))
@@ -91,7 +90,6 @@ class Sudoku:
                                   command=self._toggle_nota)
         self.btn_nota.pack(pady=(0, 10))
 
-    # ── Cronômetro ───────────────────────────────────────────────
     def _iniciar_timer(self):
         if self._timer_id:
             self.root.after_cancel(self._timer_id)
@@ -110,13 +108,11 @@ class Sudoku:
             self.root.after_cancel(self._timer_id)
             self._timer_id = None
 
-    # ── Novo jogo ────────────────────────────────────────────────
     def novo_jogo(self):
         board = SudokuBoard()
         board.generate_full_board()
         self.puzzle, self.solucao = board.create_puzzle()
 
-        # Copia o puzzle para o tabuleiro do usuário
         self.usuario = []
         for r in range(9):
             linha = []
@@ -124,7 +120,6 @@ class Sudoku:
                 linha.append(self.puzzle[r][c])
             self.usuario.append(linha)
 
-        # Marca quais células são fixas (dadas pelo puzzle)
         self.fixas = []
         for r in range(9):
             linha = []
@@ -151,7 +146,6 @@ class Sudoku:
         self._iniciar_timer()
         self._desenhar()
 
-    # ── Clique do mouse ──────────────────────────────────────────
     def _click(self, event):
         c = event.x // CELL
         r = event.y // CELL
@@ -159,7 +153,6 @@ class Sudoku:
             self.sel = (r, c)
             self._desenhar()
 
-    # ── Teclado ──────────────────────────────────────────────────
     def _tecla(self, event):
         if event.keysym == "Delete" or event.keysym == "BackSpace":
             self._apagar()
@@ -173,7 +166,6 @@ class Sudoku:
             self._toggle_nota()
             return
 
-        # Navegação pelas setas
         if self.sel is None:
             self.sel = (0, 0)
 
@@ -188,7 +180,6 @@ class Sudoku:
         elif event.keysym == "Right":
             c = c + 1
 
-        # Mantém dentro dos limites
         if r < 0:
             r = 0
         if r > 8:
@@ -201,7 +192,6 @@ class Sudoku:
         self.sel = (r, c)
         self._desenhar()
 
-    # ── Inserir número ───────────────────────────────────────────
     def _inserir(self, valor):
         if self.sel is None:
             return
@@ -211,7 +201,6 @@ class Sudoku:
         if self.fixas[r][c]:
             return
 
-        # Modo rascunho: adiciona ou remove nota
         if self.modo_nota:
             if self.usuario[r][c] == 0:
                 if valor in self.notas[r][c]:
@@ -221,7 +210,6 @@ class Sudoku:
                 self._desenhar()
             return
 
-        # Modo normal: insere o número
         self.usuario[r][c] = valor
         self.notas[r][c] = []
         self._limpar_notas_peers(r, c, valor)
@@ -245,7 +233,6 @@ class Sudoku:
             messagebox.showinfo("Parabéns!",
                 f"Você completou o Sudoku!\nTempo: {minutos:02d}:{segs:02d}")
 
-    # ── Limpar notas dos peers ───────────────────────────────────
     def _limpar_notas_peers(self, row, col, val):
         box_row = (row // 3) * 3
         box_col = (col // 3) * 3
@@ -264,7 +251,6 @@ class Sudoku:
                 if val in self.notas[i][j]:
                     self.notas[i][j].remove(val)
 
-    # ── Apagar célula ────────────────────────────────────────────
     def _apagar(self):
         if self.sel is None:
             return
@@ -274,7 +260,6 @@ class Sudoku:
             self.notas[r][c] = []
             self._desenhar()
 
-    # ── Resolver tudo ────────────────────────────────────────────
     def _resolver(self):
         self._parar_timer()
         for r in range(9):
@@ -283,7 +268,6 @@ class Sudoku:
                 self.notas[r][c] = []
         self._desenhar()
 
-    # ── Modo rascunho ────────────────────────────────────────────
     def _toggle_nota(self):
         if self.modo_nota:
             self.modo_nota = False
@@ -297,7 +281,6 @@ class Sudoku:
         else:
             self.btn_nota.config(text="✏  Rascunho: OFF", bg="#dddddd")
 
-    # ── Verificar vitória ────────────────────────────────────────
     def _vitoria(self):
         for r in range(9):
             for c in range(9):
@@ -305,21 +288,17 @@ class Sudoku:
                     return False
         return True
 
-    # ── Calcular peers da célula selecionada ─────────────────────
     def _peers(self, sr, sc):
         peers = []
         box_row = (sr // 3) * 3
         box_col = (sc // 3) * 3
 
         for i in range(9):
-            # Linha
             if (sr, i) not in peers and (sr, i) != (sr, sc):
                 peers.append((sr, i))
-            # Coluna
             if (i, sc) not in peers and (i, sc) != (sr, sc):
                 peers.append((i, sc))
 
-        # Box 3x3
         for i in range(box_row, box_row + 3):
             for j in range(box_col, box_col + 3):
                 if (i, j) not in peers and (i, j) != (sr, sc):
@@ -327,7 +306,6 @@ class Sudoku:
 
         return peers
 
-    # ── Desenhar o tabuleiro ─────────────────────────────────────
     def _desenhar(self):
         self.canvas.delete("all")
 
@@ -336,18 +314,15 @@ class Sudoku:
         else:
             sr, sc = -1, -1
 
-        # Número da célula selecionada (para destacar iguais)
         num_sel = 0
         if self.sel:
             num_sel = self.usuario[sr][sc]
 
-        # Lista de peers da célula selecionada
         if self.sel:
             peers = self._peers(sr, sc)
         else:
             peers = []
 
-        # Desenha cada célula
         for r in range(9):
             for c in range(9):
                 x1 = c * CELL
@@ -357,7 +332,6 @@ class Sudoku:
 
                 val = self.usuario[r][c]
 
-                # Escolhe a cor de fundo
                 if r == sr and c == sc:
                     bg = C_CELL_SEL
                 elif num_sel != 0 and val == num_sel:
@@ -370,7 +344,6 @@ class Sudoku:
                 self.canvas.create_rectangle(x1, y1, x2, y2,
                                              fill=bg, outline="")
 
-                # Desenha o número ou as notas
                 if val != 0:
                     errado = False
                     if not self.fixas[r][c] and val != self.solucao[r][c]:
@@ -395,7 +368,6 @@ class Sudoku:
                 elif len(self.notas[r][c]) > 0:
                     self._desenhar_notas(x1, y1, self.notas[r][c])
 
-        # Desenha as linhas da grade
         for i in range(10):
             if i % 3 == 0:
                 espessura = 2
@@ -407,7 +379,6 @@ class Sudoku:
             self.canvas.create_line(0, i * CELL, GRID, i * CELL,
                                     fill="black", width=espessura)
 
-    # ── Desenhar notas dentro de uma célula ──────────────────────
     def _desenhar_notas(self, x1, y1, notas):
         sz = CELL // 3
         for n in notas:
