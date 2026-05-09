@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import messagebox
-import copy
 from sudoku import SudokuBoard
 
 CELL = 54
@@ -14,7 +13,6 @@ C_CELL_SAME   = "#d0d0ff"
 C_NUM_FIXED   = "black"
 C_NUM_USER    = "#1a1aaa"
 C_NUM_ERROR   = "#ff0000"
-C_NOTE        = "#666699"
 
 
 class Sudoku:
@@ -84,12 +82,6 @@ class Sudoku:
                   bg="#dddddd", fg="black", relief="flat",
                   padx=10, pady=4, command=self._resolver).pack(side="left", padx=6)
 
-        self.btn_nota = tk.Button(self.root, text="✏  Rascunho: OFF",
-                                  font=("Arial", 10), bg="#dddddd", fg="black",
-                                  relief="flat", padx=10, pady=4,
-                                  command=self._toggle_nota)
-        self.btn_nota.pack(pady=(0, 10))
-
     def _iniciar_timer(self):
         if self._timer_id:
             self.root.after_cancel(self._timer_id)
@@ -130,18 +122,8 @@ class Sudoku:
                     linha.append(False)
             self.fixas.append(linha)
 
-        # Limpa as notas
-        self.notas = []
-        for i in range(9):
-            linha = []
-            for j in range(9):
-                linha.append([])
-            self.notas.append(linha)
-
         self.sel       = None
         self.erros     = 0
-        self.modo_nota = False
-        self._atualizar_btn_nota()
         self.lbl_erros.config(text="Erros: 0")
         self._iniciar_timer()
         self._desenhar()
@@ -160,10 +142,6 @@ class Sudoku:
 
         if event.char.isdigit() and event.char != "0":
             self._inserir(int(event.char))
-            return
-
-        if event.keysym == "n":
-            self._toggle_nota()
             return
 
         if self.sel is None:
@@ -201,18 +179,9 @@ class Sudoku:
         if self.fixas[r][c]:
             return
 
-        if self.modo_nota:
-            if self.usuario[r][c] == 0:
-                if valor in self.notas[r][c]:
-                    self.notas[r][c].remove(valor)
-                else:
-                    self.notas[r][c].append(valor)
-                self._desenhar()
-            return
-
         self.usuario[r][c] = valor
         self.notas[r][c] = []
-        self._limpar_notas_peers(r, c, valor)
+        self._limpar_notas_pares(r, c, valor)
 
         if valor != self.solucao[r][c]:
             self.erros += 1
@@ -233,7 +202,7 @@ class Sudoku:
             messagebox.showinfo("Parabéns!",
                 f"Você completou o Sudoku!\nTempo: {minutos:02d}:{segs:02d}")
 
-    def _limpar_notas_peers(self, row, col, val):
+    def _limpar_notas_pares(self, row, col, val):
         box_row = (row // 3) * 3
         box_col = (col // 3) * 3
 
@@ -268,19 +237,6 @@ class Sudoku:
                 self.notas[r][c] = []
         self._desenhar()
 
-    def _toggle_nota(self):
-        if self.modo_nota:
-            self.modo_nota = False
-        else:
-            self.modo_nota = True
-        self._atualizar_btn_nota()
-
-    def _atualizar_btn_nota(self):
-        if self.modo_nota:
-            self.btn_nota.config(text="✏  Rascunho: ON",  bg="#aaaadd")
-        else:
-            self.btn_nota.config(text="✏  Rascunho: OFF", bg="#dddddd")
-
     def _vitoria(self):
         for r in range(9):
             for c in range(9):
@@ -288,23 +244,23 @@ class Sudoku:
                     return False
         return True
 
-    def _peers(self, sr, sc):
-        peers = []
+    def _pares(self, sr, sc): 
+        pares = []
         box_row = (sr // 3) * 3
         box_col = (sc // 3) * 3
 
         for i in range(9):
-            if (sr, i) not in peers and (sr, i) != (sr, sc):
-                peers.append((sr, i))
-            if (i, sc) not in peers and (i, sc) != (sr, sc):
-                peers.append((i, sc))
+            if (sr, i) not in pares and (sr, i) != (sr, sc):
+                pares.append((sr, i))
+            if (i, sc) not in pares and (i, sc) != (sr, sc):
+                pares.append((i, sc))
 
         for i in range(box_row, box_row + 3):
             for j in range(box_col, box_col + 3):
-                if (i, j) not in peers and (i, j) != (sr, sc):
-                    peers.append((i, j))
+                if (i, j) not in pares and (i, j) != (sr, sc):
+                    pares.append((i, j))
 
-        return peers
+        return pares
 
     def _desenhar(self):
         self.canvas.delete("all")
@@ -319,9 +275,9 @@ class Sudoku:
             num_sel = self.usuario[sr][sc]
 
         if self.sel:
-            peers = self._peers(sr, sc)
+            pares = self._pares(sr, sc)
         else:
-            peers = []
+            pares = []
 
         for r in range(9):
             for c in range(9):
@@ -336,26 +292,23 @@ class Sudoku:
                     bg = C_CELL_SEL
                 elif num_sel != 0 and val == num_sel:
                     bg = C_CELL_SAME
-                elif (r, c) in peers:
+                elif (r, c) in pares:
                     bg = C_CELL_PEER
                 else:
                     bg = C_CELL_NORMAL
 
-                self.canvas.create_rectangle(x1, y1, x2, y2,
-                                             fill=bg, outline="")
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill=bg, outline="")
 
                 if val != 0:
                     errado = False
                     if not self.fixas[r][c] and val != self.solucao[r][c]:
                         errado = True
-
                     if errado:
                         cor = C_NUM_ERROR
                     elif self.fixas[r][c]:
                         cor = C_NUM_FIXED
                     else:
                         cor = C_NUM_USER
-
                     if self.fixas[r][c]:
                         peso = "bold"
                     else:
