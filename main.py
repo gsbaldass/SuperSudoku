@@ -82,24 +82,6 @@ class Sudoku:
                   bg="#dddddd", fg="black", relief="flat",
                   padx=10, pady=4, command=self._resolver).pack(side="left", padx=6)
 
-    def _iniciar_timer(self):
-        if self._timer_id:
-            self.root.after_cancel(self._timer_id)
-        self.segundos = 0
-        self._tick()
-
-    def _tick(self):
-        minutos = self.segundos // 60
-        segs    = self.segundos % 60
-        self.lbl_timer.config(text=f"{minutos:02d}:{segs:02d}")
-        self.segundos += 1
-        self._timer_id = self.root.after(1000, self._tick)
-
-    def _parar_timer(self):
-        if self._timer_id:
-            self.root.after_cancel(self._timer_id)
-            self._timer_id = None
-
     def novo_jogo(self):
         board = SudokuBoard()
         board.generate_full_board()
@@ -128,10 +110,28 @@ class Sudoku:
         self._iniciar_timer()
         self._desenhar()
 
+    def _iniciar_timer(self):
+        if self._timer_id:
+            self.root.after_cancel(self._timer_id)
+        self.segundos = 0
+        self._tick()
+
+    def _tick(self):
+        minutos = self.segundos // 60
+        segs    = self.segundos % 60
+        self.lbl_timer.config(text=f"{minutos:02d}:{segs:02d}")
+        self.segundos += 1
+        self._timer_id = self.root.after(1000, self._tick)
+
+    def _parar_timer(self):
+        if self._timer_id:
+            self.root.after_cancel(self._timer_id)
+            self._timer_id = None
+
     def _click(self, event):
         c = event.x // CELL
-        r = event.y // CELL
-        if r >= 0 and r < 9 and c >= 0 and c < 9:
+        r = event.y // CELL 
+        if r >= 0 and r < 9 and c >= 0 and c < 9: 
             self.sel = (r, c)
             self._desenhar()
 
@@ -173,14 +173,13 @@ class Sudoku:
     def _inserir(self, valor):
         if self.sel is None:
             return
-
+        
         r, c = self.sel
 
         if self.fixas[r][c]:
             return
 
         self.usuario[r][c] = valor
-        self.notas[r][c] = []
         self._limpar_notas_pares(r, c, valor)
 
         if valor != self.solucao[r][c]:
@@ -202,39 +201,20 @@ class Sudoku:
             messagebox.showinfo("Parabéns!",
                 f"Você completou o Sudoku!\nTempo: {minutos:02d}:{segs:02d}")
 
-    def _limpar_notas_pares(self, row, col, val):
-        box_row = (row // 3) * 3
-        box_col = (col // 3) * 3
-
-        for i in range(9):
-            # Linha
-            if val in self.notas[row][i]:
-                self.notas[row][i].remove(val)
-            # Coluna
-            if val in self.notas[i][col]:
-                self.notas[i][col].remove(val)
-
-        # Box 3x3
-        for i in range(box_row, box_row + 3):
-            for j in range(box_col, box_col + 3):
-                if val in self.notas[i][j]:
-                    self.notas[i][j].remove(val)
-
     def _apagar(self):
         if self.sel is None:
             return
         r, c = self.sel
         if not self.fixas[r][c]:
             self.usuario[r][c] = 0
-            self.notas[r][c] = []
             self._desenhar()
 
-    def _resolver(self):
+    def _resolver(self): 
         self._parar_timer()
         for r in range(9):
             for c in range(9):
                 self.usuario[r][c] = self.solucao[r][c]
-                self.notas[r][c] = []
+
         self._desenhar()
 
     def _vitoria(self):
@@ -243,24 +223,6 @@ class Sudoku:
                 if self.usuario[r][c] != self.solucao[r][c]:
                     return False
         return True
-
-    def _pares(self, sr, sc): 
-        pares = []
-        box_row = (sr // 3) * 3
-        box_col = (sc // 3) * 3
-
-        for i in range(9):
-            if (sr, i) not in pares and (sr, i) != (sr, sc):
-                pares.append((sr, i))
-            if (i, sc) not in pares and (i, sc) != (sr, sc):
-                pares.append((i, sc))
-
-        for i in range(box_row, box_row + 3):
-            for j in range(box_col, box_col + 3):
-                if (i, j) not in pares and (i, j) != (sr, sc):
-                    pares.append((i, j))
-
-        return pares
 
     def _desenhar(self):
         self.canvas.delete("all")
@@ -341,6 +303,42 @@ class Sudoku:
             cy = y1 + nr * sz + sz // 2
             self.canvas.create_text(cx, cy, text=str(n),
                                     font=("Arial", 7), fill=C_NOTE)
+    
+    def _pares(self, sr, sc): 
+        pares = []
+        box_row = (sr // 3) * 3
+        box_col = (sc // 3) * 3
+
+        for i in range(9):
+            if (sr, i) not in pares and (sr, i) != (sr, sc):
+                pares.append((sr, i))
+            if (i, sc) not in pares and (i, sc) != (sr, sc):
+                pares.append((i, sc))
+
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if (i, j) not in pares and (i, j) != (sr, sc):
+                    pares.append((i, j))
+
+        return pares
+
+    def _limpar_notas_pares(self, row, col, val):
+        box_row = (row // 3) * 3
+        box_col = (col // 3) * 3
+
+        for i in range(9):
+            # Linha
+            if val in self.notas[row][i]:
+                self.notas[row][i].remove(val)
+            # Coluna
+            if val in self.notas[i][col]:
+                self.notas[i][col].remove(val)
+
+        # Box 3x3
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                if val in self.notas[i][j]:
+                    self.notas[i][j].remove(val)
 
 
 if __name__ == "__main__":
